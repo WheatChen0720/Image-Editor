@@ -223,7 +223,7 @@ bool TargaImage::To_Grayscale()
 		float gray_f = 0.299f * r + 0.587f * g + 0.114f * b;
 		if (gray_f < 0.0f) gray_f = 0.0f;
 		if (gray_f > 255.0f) gray_f = 255.0f;
-		unsigned char gray = (unsigned char)(gray_f + 0.5f);
+		unsigned char gray = (unsigned char)gray_f;
 
 		data[i + RED] = gray;
 		data[i + GREEN] = gray;
@@ -371,8 +371,24 @@ bool TargaImage::Quant_Populosity()
 ///////////////////////////////////////////////////////////////////////////////
 bool TargaImage::Dither_Threshold()
 {
-    ClearToBlack();
-    return false;
+    if (!data)
+        return false;
+
+    for (int i = 0; i < width * height * 4; i += 4)
+    {
+        // Grayscale in range 0-255, then threshold at 0.5 (i.e. 127.5).
+        float gray_f = 0.299f * data[i + RED]
+                     + 0.587f * data[i + GREEN]
+                     + 0.114f * data[i + BLUE];
+        unsigned char v = (gray_f >= 127.5f) ? 255 : 0;
+
+        data[i + RED] = v;
+        data[i + GREEN] = v;
+        data[i + BLUE] = v;
+        // alpha left unchanged (tests use alpha = 1)
+    }
+
+    return true;
 }// Dither_Threshold
 
 
@@ -383,8 +399,26 @@ bool TargaImage::Dither_Threshold()
 ///////////////////////////////////////////////////////////////////////////////
 bool TargaImage::Dither_Random()
 {
-    ClearToBlack();
-    return false;
+    if (!data)
+        return false;
+
+    // Random dithering: intensity in 0-1, add uniform noise in [-0.2, 0.2],
+    // threshold at 0.5. Fixed seed (no srand) keeps output reproducible.
+    for (int i = 0; i < width * height * 4; i += 4)
+    {
+        float g01 = (0.299f * data[i + RED]
+                   + 0.587f * data[i + GREEN]
+                   + 0.114f * data[i + BLUE]) / 255.0f;
+        float noise = ((float)rand() / (float)RAND_MAX - 0.5f) * 0.4f;
+        unsigned char v = (g01 + noise >= 0.5f) ? 255 : 0;
+
+        data[i + RED] = v;
+        data[i + GREEN] = v;
+        data[i + BLUE] = v;
+        // alpha left unchanged (tests use alpha = 1)
+    }
+
+    return true;
 }// Dither_Random
 
 
@@ -396,8 +430,62 @@ bool TargaImage::Dither_Random()
 ///////////////////////////////////////////////////////////////////////////////
 bool TargaImage::Dither_FS()
 {
-    ClearToBlack();
-    return false;
+    if (!data)
+        return false;
+
+    const int npix = width * height;
+
+    // Float grayscale buffer (0-255), truncated to integer like the
+    // reference's grayscale convention; fractions then feed diffusion.
+    // NOTE: double literals (not float): float64 truncation matches the
+    // reference. float32 truncation seeds ~7K exact-integer gray pixels
+    // differently and the diffusion cascade amplifies it visibly.
+    vector<float> buf(npix);
+    for (int p = 0; p < npix; p++)
+    {
+        int gi = (int)(0.299 * data[p * 4 + RED]
+                     + 0.587 * data[p * 4 + GREEN]
+                     + 0.114 * data[p * 4 + BLUE]);
+        if (gi < 0) gi = 0;
+        if (gi > 255) gi = 255;
+        buf[p] = (float)gi;
+    }
+
+    // Serpentine (zig-zag) scan with mirrored error weights.
+    for (int y = 0; y < height; y++)
+    {
+        bool ltr = (y % 2 == 0);
+        int x0 = ltr ? 0 : width - 1;
+        int x1 = ltr ? width : -1;
+        int dx = ltr ? 1 : -1;
+        for (int x = x0; x != x1; x += dx)
+        {
+            float oldv = buf[y * width + x];
+            float newv = (oldv >= 127.5f) ? 255.0f : 0.0f;
+            data[(y * width + x) * 4 + RED] =
+            data[(y * width + x) * 4 + GREEN] =
+            data[(y * width + x) * 4 + BLUE] =
+                (newv >= 127.5f) ? (unsigned char)255 : (unsigned char)0;
+
+            float err = oldv - newv;
+            // Unvisited neighbors: ahead in x, plus the row below.
+            int xa = x + dx;       // 7/16
+            int xb = x - dx;       // 3/16 (below) / 1/16 mirrored
+            if (xa >= 0 && xa < width)
+                buf[y * width + xa] += err * (7.0f / 16.0f);
+            if (y + 1 < height)
+            {
+                if (xb >= 0 && xb < width)
+                    buf[(y + 1) * width + xb] += err * (3.0f / 16.0f);
+                buf[(y + 1) * width + x] += err * (5.0f / 16.0f);
+                if (xa >= 0 && xa < width)
+                    buf[(y + 1) * width + xa] += err * (1.0f / 16.0f);
+            }
+        }
+    }
+    // alpha left unchanged (tests use alpha = 1)
+
+    return true;
 }// Dither_FS
 
 
@@ -409,8 +497,66 @@ bool TargaImage::Dither_FS()
 ///////////////////////////////////////////////////////////////////////////////
 bool TargaImage::Dither_Bright()
 {
-    ClearToBlack();
-    return false;
+    if (!data)
+        return false;
+
+    const int npix = width * height;
+
+    // 1. Grayscale each pixel (truncated integer 0-255) and accumulate brightness.
+    vector<int> gray(npix);
+    long long sum = 0;
+    for (int p = 0; p < npix; p++)
+    {
+        float g = 0.299f * data[p * 4 + RED]
+                + 0.587f * data[p * 4 + GREEN]
+                + 0.114f * data[p * 4 + BLUE];
+        int gi = (int)g;
+        if (gi < 0) gi = 0;
+        if (gi > 255) gi = 255;
+        gray[p] = gi;
+        sum += gi;
+    }
+    double avg = (double)sum / npix; // average brightness, 0-255
+
+    // 2. Choose T so the output keeps the same average brightness:
+    //    white fraction must satisfy count(gray >= T)/npix ~= avg/255,
+    //    i.e. whiteCount = round(avg/255 * npix). Accumulate the
+    //    histogram from the top until that many pixels are covered.
+    int whiteCount = (int)(avg / 255.0 * npix + 0.5);
+    int T;
+    if (whiteCount <= 0)
+        T = 256; // all black
+    else if (whiteCount >= npix)
+        T = 0;   // all white
+    else
+    {
+        int hist[256] = { 0 };
+        for (int p = 0; p < npix; p++)
+            hist[gray[p]]++;
+        T = 0;
+        int cum = 0;
+        for (int v = 255; v >= 0; v--)
+        {
+            cum += hist[v];
+            if (cum >= whiteCount)
+            {
+                T = v;
+                break;
+            }
+        }
+    }
+
+    // 3. Threshold at T.
+    for (int p = 0; p < npix; p++)
+    {
+        unsigned char v = (gray[p] >= T) ? 255 : 0;
+        data[p * 4 + RED] = v;
+        data[p * 4 + GREEN] = v;
+        data[p * 4 + BLUE] = v;
+        // alpha left unchanged (tests use alpha = 1)
+    }
+
+    return true;
 }// Dither_Bright
 
 
@@ -421,8 +567,41 @@ bool TargaImage::Dither_Bright()
 ///////////////////////////////////////////////////////////////////////////////
 bool TargaImage::Dither_Cluster()
 {
-    ClearToBlack();
-    return false;
+    if (!data)
+        return false;
+
+    // Clustered-dot tile: spec decimals are n/17 rounded to 4 places
+    // (12/17=0.7059, ...), so use exact integer numerators. Reference
+    // accesses the tile transposed: tile[y%4][x%4].
+    static const int mask[4][4] = {
+        { 12, 6, 10, 4 },
+        { 1, 16, 14, 7 },
+        { 8, 13, 15, 2 },
+        { 3, 9, 5, 11 }
+    };
+
+    for (int y = 0; y < height; y++)
+    {
+        for (int x = 0; x < width; x++)
+        {
+            int i = (y * width + x) * 4;
+            int gi = (int)(0.299f * data[i + RED]
+                         + 0.587f * data[i + GREEN]
+                         + 0.114f * data[i + BLUE]);
+            if (gi < 0) gi = 0;
+            if (gi > 255) gi = 255;
+            // White if I > tile[y%4][x%4]; integer-exact form of
+            // (gi/255) > (m/17), i.e. gi*17 > m*255.
+            unsigned char v = (gi * 17 > mask[y % 4][x % 4] * 255) ? 255 : 0;
+
+            data[i + RED] = v;
+            data[i + GREEN] = v;
+            data[i + BLUE] = v;
+            // alpha left unchanged (tests use alpha = 1)
+        }
+    }
+
+    return true;
 }// Dither_Cluster
 
 
@@ -435,8 +614,86 @@ bool TargaImage::Dither_Cluster()
 ///////////////////////////////////////////////////////////////////////////////
 bool TargaImage::Dither_Color()
 {
-    ClearToBlack();
-    return false;
+    if (!data)
+        return false;
+
+    // Uniform-quantization palette shared with Quant_Uniform.
+    static const unsigned char RG_LEVELS[8] = { 0, 36, 73, 109, 146, 182, 219, 255 };
+    static const unsigned char B_LEVELS[4] = { 0, 85, 170, 255 };
+
+    const int npix = width * height;
+
+    // Per-channel float buffers (diffused error needs fractions).
+    vector<float> bufR(npix), bufG(npix), bufB(npix);
+    for (int p = 0; p < npix; p++)
+    {
+        bufR[p] = (float)data[p * 4 + RED];
+        bufG[p] = (float)data[p * 4 + GREEN];
+        bufB[p] = (float)data[p * 4 + BLUE];
+    }
+
+    // Serpentine scan (same traversal as Dither_FS), quantizing each
+    // pixel to the nearest palette color and diffusing per-channel error.
+    for (int y = 0; y < height; y++)
+    {
+        bool ltr = (y % 2 == 0);
+        int x0 = ltr ? 0 : width - 1;
+        int x1 = ltr ? width : -1;
+        int dx = ltr ? 1 : -1;
+        for (int x = x0; x != x1; x += dx)
+        {
+            int p = y * width + x;
+
+            int ri = (int)(bufR[p] * 7.0f / 255.0f + 0.5f);
+            int gi = (int)(bufG[p] * 7.0f / 255.0f + 0.5f);
+            int bi = (int)(bufB[p] * 3.0f / 255.0f + 0.5f);
+            if (ri < 0) ri = 0; if (ri > 7) ri = 7;
+            if (gi < 0) gi = 0; if (gi > 7) gi = 7;
+            if (bi < 0) bi = 0; if (bi > 3) bi = 3;
+
+            float newR = (float)RG_LEVELS[ri];
+            float newG = (float)RG_LEVELS[gi];
+            float newB = (float)B_LEVELS[bi];
+
+            data[p * 4 + RED] = RG_LEVELS[ri];
+            data[p * 4 + GREEN] = RG_LEVELS[gi];
+            data[p * 4 + BLUE] = B_LEVELS[bi];
+
+            float errR = bufR[p] - newR;
+            float errG = bufG[p] - newG;
+            float errB = bufB[p] - newB;
+
+            int xa = x + dx;
+            int xb = x - dx;
+            if (xa >= 0 && xa < width)
+            {
+                bufR[y * width + xa] += errR * (7.0f / 16.0f);
+                bufG[y * width + xa] += errG * (7.0f / 16.0f);
+                bufB[y * width + xa] += errB * (7.0f / 16.0f);
+            }
+            if (y + 1 < height)
+            {
+                if (xb >= 0 && xb < width)
+                {
+                    bufR[(y + 1) * width + xb] += errR * (3.0f / 16.0f);
+                    bufG[(y + 1) * width + xb] += errG * (3.0f / 16.0f);
+                    bufB[(y + 1) * width + xb] += errB * (3.0f / 16.0f);
+                }
+                bufR[(y + 1) * width + x] += errR * (5.0f / 16.0f);
+                bufG[(y + 1) * width + x] += errG * (5.0f / 16.0f);
+                bufB[(y + 1) * width + x] += errB * (5.0f / 16.0f);
+                if (xa >= 0 && xa < width)
+                {
+                    bufR[(y + 1) * width + xa] += errR * (1.0f / 16.0f);
+                    bufG[(y + 1) * width + xa] += errG * (1.0f / 16.0f);
+                    bufB[(y + 1) * width + xa] += errB * (1.0f / 16.0f);
+                }
+            }
+        }
+    }
+    // alpha left unchanged (tests use alpha = 1)
+
+    return true;
 }// Dither_Color
 
 
