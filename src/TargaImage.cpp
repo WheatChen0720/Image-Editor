@@ -211,8 +211,27 @@ TargaImage* TargaImage::Load_Image(char *filename)
 ///////////////////////////////////////////////////////////////////////////////
 bool TargaImage::To_Grayscale()
 {
-	ClearToBlack();
-	return false;
+	if (!data)
+		return false;
+
+	for (int i = 0; i < width * height * 4; i += 4)
+	{
+		unsigned char r = data[i + RED];
+		unsigned char g = data[i + GREEN];
+		unsigned char b = data[i + BLUE];
+
+		float gray_f = 0.299f * r + 0.587f * g + 0.114f * b;
+		if (gray_f < 0.0f) gray_f = 0.0f;
+		if (gray_f > 255.0f) gray_f = 255.0f;
+		unsigned char gray = (unsigned char)(gray_f + 0.5f);
+
+		data[i + RED] = gray;
+		data[i + GREEN] = gray;
+		data[i + BLUE] = gray;
+		// alpha (data[i + 3]) left unchanged
+	}
+
+	return true;
 }// To_Grayscale
 
 
@@ -224,8 +243,35 @@ bool TargaImage::To_Grayscale()
 ///////////////////////////////////////////////////////////////////////////////
 bool TargaImage::Quant_Uniform()
 {
-    ClearToBlack();
-    return false;
+    if (!data)
+        return false;
+
+    // Palette matching the dither-color spec: R,G 8 levels, B 4 levels.
+    static const unsigned char RG_LEVELS[8] = { 0, 36, 73, 109, 146, 182, 219, 255 };
+    static const unsigned char B_LEVELS[4] = { 0, 85, 170, 255 };
+
+    for (int i = 0; i < width * height * 4; i += 4)
+    {
+        unsigned char r = data[i + RED];
+        unsigned char g = data[i + GREEN];
+        unsigned char b = data[i + BLUE];
+
+        // Nearest-level uniform quantization: idx = round(c * (N-1) / 255).
+        int ri = (r * 7 + 127) / 255;
+        int gi = (g * 7 + 127) / 255;
+        int bi = (b * 3 + 127) / 255;
+
+        if (ri < 0) ri = 0; if (ri > 7) ri = 7;
+        if (gi < 0) gi = 0; if (gi > 7) gi = 7;
+        if (bi < 0) bi = 0; if (bi > 3) bi = 3;
+
+        data[i + RED] = RG_LEVELS[ri];
+        data[i + GREEN] = RG_LEVELS[gi];
+        data[i + BLUE] = B_LEVELS[bi];
+        // alpha left unchanged
+    }
+
+    return true;
 }// Quant_Uniform
 
 
@@ -237,8 +283,84 @@ bool TargaImage::Quant_Uniform()
 ///////////////////////////////////////////////////////////////////////////////
 bool TargaImage::Quant_Populosity()
 {
-    ClearToBlack();
-    return false;
+    if (!data)
+        return false;
+
+    const int LEVELS = 32;
+    const int HIST_SIZE = LEVELS * LEVELS * LEVELS; // 32^3 = 32768
+    const int PALETTE_SIZE = 256;
+
+    // 1. Uniform pre-quantization to 32 shades/channel + popularity histogram.
+    //    Bin index per channel: c32 = c >> 3 (0..31).
+    vector<int> hist(HIST_SIZE, 0);
+    const int npix = width * height;
+    for (int p = 0; p < npix; p++)
+    {
+        int r32 = data[p * 4 + RED] >> 3;
+        int g32 = data[p * 4 + GREEN] >> 3;
+        int b32 = data[p * 4 + BLUE] >> 3;
+        hist[(r32 << 10) | (g32 << 5) | b32]++;
+    }
+
+    // 2. Find the 256 most popular bins (count desc, index asc for ties).
+    vector<int> order(HIST_SIZE);
+    for (int i = 0; i < HIST_SIZE; i++)
+        order[i] = i;
+    sort(order.begin(), order.end(), [&hist](int a, int b) {
+        if (hist[a] != hist[b])
+            return hist[a] > hist[b];
+        return a < b;
+    });
+
+    // Palette entries use the bin center as representative: rep = bin * 8 + 4.
+    struct RGB { unsigned char r, g, b; };
+    vector<RGB> palette;
+    for (int i = 0; i < HIST_SIZE && (int)palette.size() < PALETTE_SIZE; i++)
+    {
+        if (hist[order[i]] == 0)
+            break;
+        int b32 = order[i] & 31;
+        int g32 = (order[i] >> 5) & 31;
+        int r32 = (order[i] >> 10) & 31;
+        RGB c;
+        c.r = (unsigned char)((r32 << 3) + 4);
+        c.g = (unsigned char)((g32 << 3) + 4);
+        c.b = (unsigned char)((b32 << 3) + 4);
+        palette.push_back(c);
+    }
+    if (palette.empty())
+        return false;
+
+    // 3. Map each ORIGINAL pixel color to the closest palette color.
+    //    L2 distance in RGB; squared distance gives the same ordering as sqrt.
+    for (int p = 0; p < npix; p++)
+    {
+        int r = data[p * 4 + RED];
+        int g = data[p * 4 + GREEN];
+        int b = data[p * 4 + BLUE];
+
+        int best = 0;
+        int bestDist = 3 * 255 * 255 + 1;
+        for (int k = 0; k < (int)palette.size(); k++)
+        {
+            int dr = r - palette[k].r;
+            int dg = g - palette[k].g;
+            int db = b - palette[k].b;
+            int d = dr * dr + dg * dg + db * db;
+            if (d < bestDist)
+            {
+                bestDist = d;
+                best = k;
+            }
+        }
+
+        data[p * 4 + RED] = palette[best].r;
+        data[p * 4 + GREEN] = palette[best].g;
+        data[p * 4 + BLUE] = palette[best].b;
+        // alpha left unchanged
+    }
+
+    return true;
 }// Quant_Populosity
 
 
