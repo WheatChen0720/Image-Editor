@@ -427,4 +427,10 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Test data
 /Images
+
+# FLTK lib
+!lib/[Dd]ebug/
+!lib/[Rr]elease/
