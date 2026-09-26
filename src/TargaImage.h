@@ -63,6 +63,8 @@ class TargaImage
 
         bool NPR_Paint();
 
+        bool Scale(float scaleFactor);
+
         bool Half_Size();
         bool Double_Size();
         bool Resize(float scale);
@@ -72,8 +74,11 @@ class TargaImage
 	// helper function for format conversion
         void RGBA_To_RGB(unsigned char *rgba, unsigned char *rgb);
 
-        // reverse the rows of the image, some targas are stored bottom to top
-	TargaImage* Reverse_Rows(void);
+    // reverse the rows of the image, some targas are stored bottom to top
+	    TargaImage* Reverse_Rows(void);
+
+    // Generic 2D convolution algorithm with border reflection
+        bool Apply_Filter(const float* kernel, int kernelSize, bool filterAlpha);
 
 	// clear image to all black
         void ClearToBlack();

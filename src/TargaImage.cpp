@@ -1,4 +1,4 @@
-///////////////////////////////////////////////////////////////////////////////
+﻿///////////////////////////////////////////////////////////////////////////////
 //
 //      TargaImage.cpp                          Author:     Stephen Chenney
 //                                              Modified:   Eric McDaniel
@@ -29,6 +29,20 @@ const int           GREEN           = 1;                // green channel
 const int           BLUE            = 2;                // blue channel
 const unsigned char BACKGROUND[3]   = { 0, 0, 0 };      // background color
 
+// Clamp a value to a range
+template <typename T>
+inline T Clamp(T val, T minVal, T maxVal) {
+    if (val < minVal) return minVal;
+    if (val > maxVal) return maxVal;
+    return val;
+}
+
+// Boundary reflection helper for mirroring edge pixels
+inline int Clamp_Reflect(int pos, int max_val) {
+    if (pos < 0) return -pos;
+    if (pos >= max_val) return 2 * max_val - 2 - pos;
+    return pos;
+}
 
 // Computes n choose s, efficiently
 double Binomial(int n, int s)
@@ -832,10 +846,10 @@ bool TargaImage::Difference(TargaImage* pImage)
 //      Perform 5x5 box filter on this image.  Return success of operation.
 //
 ///////////////////////////////////////////////////////////////////////////////
-bool TargaImage::Filter_Box()
-{
-    ClearToBlack();
-    return false;
+bool TargaImage::Filter_Box() {
+    float kernel[25];
+    for (int i = 0; i < 25; i++) kernel[i] = 1.0f / 25.0f;
+    return Apply_Filter(kernel, 5, false);
 }// Filter_Box
 
 
@@ -845,10 +859,15 @@ bool TargaImage::Filter_Box()
 //  operation.
 //
 ///////////////////////////////////////////////////////////////////////////////
-bool TargaImage::Filter_Bartlett()
-{
-    ClearToBlack();
-    return false;
+bool TargaImage::Filter_Bartlett() {
+    float b1d[5] = { 1.0f / 9.0f, 2.0f / 9.0f, 3.0f / 9.0f, 2.0f / 9.0f, 1.0f / 9.0f };
+    float kernel[25];
+    for (int r = 0; r < 5; r++) {
+        for (int c = 0; c < 5; c++) {
+            kernel[r * 5 + c] = b1d[r] * b1d[c];
+        }
+    }
+    return Apply_Filter(kernel, 5, false);
 }// Filter_Bartlett
 
 
@@ -858,10 +877,15 @@ bool TargaImage::Filter_Bartlett()
 //  operation.
 //
 ///////////////////////////////////////////////////////////////////////////////
-bool TargaImage::Filter_Gaussian()
-{
-    ClearToBlack();
-    return false;
+bool TargaImage::Filter_Gaussian() {
+    float g1d[5] = { 1.0f / 16.0f, 4.0f / 16.0f, 6.0f / 16.0f, 4.0f / 16.0f, 1.0f / 16.0f };
+    float kernel[25];
+    for (int r = 0; r < 5; r++) {
+        for (int c = 0; c < 5; c++) {
+            kernel[r * 5 + c] = g1d[r] * g1d[c];
+        }
+    }
+    return Apply_Filter(kernel, 5, false);
 }// Filter_Gaussian
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -871,10 +895,24 @@ bool TargaImage::Filter_Gaussian()
 //
 ///////////////////////////////////////////////////////////////////////////////
 
-bool TargaImage::Filter_Gaussian_N( unsigned int N )
-{
-    ClearToBlack();
-   return false;
+bool TargaImage::Filter_Gaussian_N(unsigned int N) {
+	if (N <= 0 || N % 2 == 0) return false; // N needs to be odd and positive
+
+    vector<double> b1d(N);
+    double sum1D = 0.0;
+    for (int i = 0; i < N; i++) {
+        b1d[i] = Binomial(N - 1, i);
+        sum1D += b1d[i];
+    }
+
+    vector<float> kernel(N * N);
+    for (int r = 0; r < N; r++) {
+        for (int c = 0; c < N; c++) {
+            kernel[r * N + c] = (float)((b1d[r] / sum1D) * (b1d[c] / sum1D));
+        }
+    }
+
+    return Apply_Filter(kernel.data(), N, false);
 }// Filter_Gaussian_N
 
 
@@ -884,10 +922,16 @@ bool TargaImage::Filter_Gaussian_N( unsigned int N )
 //  success of operation.
 //
 ///////////////////////////////////////////////////////////////////////////////
-bool TargaImage::Filter_Edge()
-{
-    ClearToBlack();
-    return false;
+bool TargaImage::Filter_Edge() {
+    // 5x5 Laplacian / Edge Detection Kernel
+    float kernel[25] = {
+        -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f, 24.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f, -1.0f, -1.0f
+    };
+    return Apply_Filter(kernel, 5, false);
 }// Filter_Edge
 
 
@@ -897,10 +941,16 @@ bool TargaImage::Filter_Edge()
 //  operation.
 //
 ///////////////////////////////////////////////////////////////////////////////
-bool TargaImage::Filter_Enhance()
-{
-    ClearToBlack();
-    return false;
+bool TargaImage::Filter_Enhance() {
+    // 5x5 Sharpness/Enhancement Kernel
+    float kernel[25] = {
+        -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,
+        -1.0f, -2.0f, -2.0f, -2.0f, -1.0f,
+        -1.0f, -2.0f, 41.0f, -2.0f, -1.0f,
+        -1.0f, -2.0f, -2.0f, -2.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f, -1.0f, -1.0f
+    };
+    return Apply_Filter(kernel, 5, false);
 }// Filter_Enhance
 
 
@@ -912,12 +962,179 @@ bool TargaImage::Filter_Enhance()
 // Return success of operation.
 //
 ///////////////////////////////////////////////////////////////////////////////
-bool TargaImage::NPR_Paint()
-{
+bool TargaImage::NPR_Paint() {
+    if (!data) return false;
+
+    // 備份原始圖作為最精準的參考原圖
+    TargaImage originalImage(*this);
+
+    // 從黑色畫布開始繪製
     ClearToBlack();
-    return false;
+
+    // 3 層筆刷半徑 (7 -> 3 -> 1)
+    const int radii[3] = { 7, 3, 1 };
+
+    // Hertzmann 演算法標準門檻 (T=25)
+    // R=7 打底大色塊，R=3 填補輪廓，R=1 精細刻畫邊緣與細節
+    const float thresholds[3] = { 10.0f, 25.0f, 25.0f };
+
+    // 固定隨機種子，確保每次繪製結果穩定
+    srand(42);
+
+    for (int layer = 0; layer < 3; layer++) {
+        int R = radii[layer];
+        float threshold = thresholds[layer];
+        int step = max(1, R); // 網格步長
+
+        // 產生該層的高斯模糊參考圖 (2R + 1)
+        TargaImage referenceImage(originalImage);
+        referenceImage.Filter_Gaussian_N(2 * R + 1);
+
+        vector<Stroke> strokeList;
+
+        for (int y = 0; y < height; y += step) {
+            for (int x = 0; x < width; x += step) {
+
+                float maxError = -1.0f;
+                int maxErrorX = x;
+                int maxErrorY = y;
+
+                int halfStep = step / 2;
+                for (int dy = -halfStep; dy <= halfStep; dy++) {
+                    int py = Clamp_Reflect(y + dy, height);
+                    for (int dx = -halfStep; dx <= halfStep; dx++) {
+                        int px = Clamp_Reflect(x + dx, width);
+
+                        int idx = (py * width + px) * 4;
+
+                        // 💡【關鍵修正】：計算「當前畫布 data」與「該層模糊參考圖 referenceImage」的誤差
+                        // 確保上一層留下的模糊處能正確觸發下一層細節筆刷
+                        float diffR = (float)data[idx + RED] - (float)referenceImage.data[idx + RED];
+                        float diffG = (float)data[idx + GREEN] - (float)referenceImage.data[idx + GREEN];
+                        float diffB = (float)data[idx + BLUE] - (float)referenceImage.data[idx + BLUE];
+
+                        float error = sqrtf(diffR * diffR + diffG * diffG + diffB * diffB);
+
+                        if (error > maxError) {
+                            maxError = error;
+                            maxErrorX = px;
+                            maxErrorY = py;
+                        }
+                    }
+                }
+
+                // 當誤差超過門檻時建立筆劃
+                if (maxError > threshold) {
+                    int strokeIdx = (maxErrorY * width + maxErrorX) * 4;
+
+                    // ✨【關鍵特效 1】：大筆刷增加位置抖動 (Jitter)，打破死板網格感
+                    int jitterX = (R > 1) ? (rand() % (R + 1) - R / 2) : 0;
+                    int jitterY = (R > 1) ? (rand() % (R + 1) - R / 2) : 0;
+                    int finalX = Clamp_Reflect(maxErrorX + jitterX, width);
+                    int finalY = Clamp_Reflect(maxErrorY + jitterY, height);
+
+                    // ✨【關鍵特效 2】：適度放大色彩抖動 (Color Jitter, -10~+10) 強化印象派手繪感
+                    int jitterR = (rand() % 21) - 10;
+                    int jitterG = (rand() % 21) - 10;
+                    int jitterB = (rand() % 21) - 10;
+
+                    unsigned char strokeR = (unsigned char)max(0, min(255, (int)referenceImage.data[strokeIdx + RED] + jitterR));
+                    unsigned char strokeG = (unsigned char)max(0, min(255, (int)referenceImage.data[strokeIdx + GREEN] + jitterG));
+                    unsigned char strokeB = (unsigned char)max(0, min(255, (int)referenceImage.data[strokeIdx + BLUE] + jitterB));
+                    unsigned char strokeA = 255;
+
+                    strokeList.push_back(Stroke(R, finalX, finalY, strokeR, strokeG, strokeB, strokeA));
+                }
+            }
+        }
+
+        // 打亂筆劃順序，消除掃描線條紋
+        std::random_shuffle(strokeList.begin(), strokeList.end());
+
+        // 繪製該層的所有筆劃
+        for (size_t i = 0; i < strokeList.size(); i++) {
+            Paint_Stroke(strokeList[i]);
+        }
+    }
+
+    return true;
+}// NPR_Paint
+
+
+inline float Bartlett_Weight1D(float d) {
+    float absD = fabsf(d);
+    if (absD >= 2.0f) return 0.0f;
+    return 1.0f - absD * 0.5f;
 }
 
+// 使用 4x4 Bartlett 濾鏡採樣原圖點 (srcX, srcY)
+void Sample_Bartlett_4x4(const unsigned char* srcData, int srcW, int srcH, float srcX, float srcY, float outColor[4]) {
+    outColor[0] = outColor[1] = outColor[2] = outColor[3] = 0.0f;
+    float totalWeight = 0.0f;
+
+    int minX = (int)floorf(srcX) - 1;
+    int minY = (int)floorf(srcY) - 1;
+
+    for (int y = minY; y <= minY + 3; y++) {
+        if (y < 0 || y >= srcH) continue; // 超出邊界視為透明/黑色
+        float wy = Bartlett_Weight1D(srcY - (y + 0.5f));
+        if (wy <= 0.0f) continue;
+
+        for (int x = minX; x <= minX + 3; x++) {
+            if (x < 0 || x >= srcW) continue;
+            float wx = Bartlett_Weight1D(srcX - (x + 0.5f));
+            float w = wx * wy;
+
+            if (w > 0.0f) {
+                int idx = (y * srcW + x) * 4;
+                outColor[0] += srcData[idx + RED] * w;
+                outColor[1] += srcData[idx + GREEN] * w;
+                outColor[2] += srcData[idx + BLUE] * w;
+                outColor[3] += srcData[idx + 3] * w;
+                totalWeight += w;
+            }
+        }
+    }
+
+    if (totalWeight > 0.0f) {
+        outColor[0] /= totalWeight;
+        outColor[1] /= totalWeight;
+        outColor[2] /= totalWeight;
+        outColor[3] /= totalWeight;
+    }
+}
+
+bool TargaImage::Scale(float scaleFactor) {
+    if (!data || scaleFactor <= 0.0f) return false;
+
+    int newW = (int)(width * scaleFactor);
+    int newH = (int)(height * scaleFactor);
+    if (newW <= 0 || newH <= 0) return false;
+
+    unsigned char* newData = new unsigned char[newW * newH * 4];
+
+    for (int y = 0; y < newH; y++) {
+        float srcY = (y + 0.5f) / scaleFactor;
+        for (int x = 0; x < newW; x++) {
+            float srcX = (x + 0.5f) / scaleFactor;
+
+            float color[4];
+            Sample_Bartlett_4x4(data, width, height, srcX, srcY, color);
+
+            int idx = (y * newW + x) * 4;
+            newData[idx + RED]   = (unsigned char)max(0.0f, min(255.0f, color[0]));
+            newData[idx + GREEN] = (unsigned char)max(0.0f, min(255.0f, color[1]));
+            newData[idx + BLUE]  = (unsigned char)max(0.0f, min(255.0f, color[2]));
+            newData[idx + 3]     = (unsigned char)max(0.0f, min(255.0f, color[3]));
+        }
+    }
+
+    delete[] data;
+    data = newData;
+    width = newW;
+    height = newH;
+    return true;
+}
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -927,8 +1144,7 @@ bool TargaImage::NPR_Paint()
 ///////////////////////////////////////////////////////////////////////////////
 bool TargaImage::Half_Size()
 {
-    ClearToBlack();
-    return false;
+    return Scale(0.5f);
 }// Half_Size
 
 
@@ -939,8 +1155,7 @@ bool TargaImage::Half_Size()
 ///////////////////////////////////////////////////////////////////////////////
 bool TargaImage::Double_Size()
 {
-    ClearToBlack();
-    return false;
+    return Scale(2.0f);
 }// Double_Size
 
 
@@ -950,10 +1165,36 @@ bool TargaImage::Double_Size()
 //  assumed to be greater than one.  Return success of operation.
 //
 ///////////////////////////////////////////////////////////////////////////////
-bool TargaImage::Resize(float scale)
-{
-    ClearToBlack();
-    return false;
+bool TargaImage::Resize(float scale) {
+    if (!data || scale <= 0.0f) return false;
+
+    int newW = (int)(width * scale);
+    int newH = (int)(height * scale);
+    if (newW <= 0 || newH <= 0) return false;
+
+    unsigned char* newData = new unsigned char[newW * newH * 4];
+
+    for (int y = 0; y < newH; y++) {
+        float srcY = (y + 0.5f) / scale;
+        for (int x = 0; x < newW; x++) {
+            float srcX = (x + 0.5f) / scale;
+
+            float color[4];
+            Sample_Bartlett_4x4(data, width, height, srcX, srcY, color);
+
+            int idx = (y * newW + x) * 4;
+            newData[idx + RED] = (unsigned char)max(0.0f, min(255.0f, color[0]));
+            newData[idx + GREEN] = (unsigned char)max(0.0f, min(255.0f, color[1]));
+            newData[idx + BLUE] = (unsigned char)max(0.0f, min(255.0f, color[2]));
+            newData[idx + 3] = (unsigned char)max(0.0f, min(255.0f, color[3]));
+        }
+    }
+
+    delete[] data;
+    data = newData;
+    width = newW;
+    height = newH;
+    return true;
 }// Resize
 
 
@@ -963,10 +1204,44 @@ bool TargaImage::Resize(float scale)
 //  image.  Return success of operation.
 //
 ///////////////////////////////////////////////////////////////////////////////
-bool TargaImage::Rotate(float angleDegrees)
-{
-    ClearToBlack();
-    return false;
+bool TargaImage::Rotate(float angleDegrees) {
+    if (!data) return false;
+
+    float rad = -angleDegrees * (3.14159265358979323846f / 180.0f); // 順時針轉置方向
+    float cosA = cosf(rad);
+    float sinA = sinf(rad);
+
+    float cx = width / 2.0f;
+    float cy = height / 2.0f;
+
+    unsigned char* newData = new unsigned char[width * height * 4];
+    memset(newData, 0, width * height * 4); // 預設黑色與透明
+
+    for (int y = 0; y < height; y++) {
+        float dy = (y + 0.5f) - cy;
+        for (int x = 0; x < width; x++) {
+            float dx = (x + 0.5f) - cx;
+
+            // 逆向計算原圖座標
+            float srcX = cosA * dx - sinA * dy + cx;
+            float srcY = sinA * dx + cosA * dy + cy;
+
+            if (srcX >= 0.0f && srcX < width && srcY >= 0.0f && srcY < height) {
+                float color[4];
+                Sample_Bartlett_4x4(data, width, height, srcX, srcY, color);
+
+                int idx = (y * width + x) * 4;
+                newData[idx + RED] = (unsigned char)max(0.0f, min(255.0f, color[0]));
+                newData[idx + GREEN] = (unsigned char)max(0.0f, min(255.0f, color[1]));
+                newData[idx + BLUE] = (unsigned char)max(0.0f, min(255.0f, color[2]));
+                newData[idx + 3] = (unsigned char)max(0.0f, min(255.0f, color[3]));
+            }
+        }
+    }
+
+    delete[] data;
+    data = newData;
+    return true;
 }// Rotate
 
 
@@ -1062,6 +1337,7 @@ void TargaImage::ClearToBlack()
 ///////////////////////////////////////////////////////////////////////////////
 void TargaImage::Paint_Stroke(const Stroke& s) {
    int radius_squared = (int)s.radius * (int)s.radius;
+
    for (int x_off = -((int)s.radius); x_off <= (int)s.radius; x_off++) {
       for (int y_off = -((int)s.radius); y_off <= (int)s.radius; y_off++) {
          int x_loc = (int)s.x + x_off;
@@ -1095,7 +1371,10 @@ void TargaImage::Paint_Stroke(const Stroke& s) {
 //      Build a Stroke
 //
 ///////////////////////////////////////////////////////////////////////////////
-Stroke::Stroke() {}
+Stroke::Stroke()
+    : radius(0), x(0), y(0), r(0), g(0), b(0), a(255)
+{
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -1108,3 +1387,41 @@ Stroke::Stroke(unsigned int iradius, unsigned int ix, unsigned int iy,
 {
 }
 
+// Generic 2D convolution algorithm with border reflection
+bool TargaImage::Apply_Filter(const float* kernel, int kernelSize, bool filterAlpha) {
+    if (!data) return false;
+
+    int halfSize = kernelSize / 2;
+    unsigned char* newData = new unsigned char[width * height * 4];
+
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            float sumR = 0.0f, sumG = 0.0f, sumB = 0.0f, sumA = 0.0f;
+
+            for (int ky = -halfSize; ky <= halfSize; ky++) {
+                int srcY = Clamp_Reflect(y + ky, height);
+                for (int kx = -halfSize; kx <= halfSize; kx++) {
+                    int srcX = Clamp_Reflect(x + kx, width);
+
+                    float weight = kernel[(ky + halfSize) * kernelSize + (kx + halfSize)];
+                    int idx = (srcY * width + srcX) * 4;
+
+                    sumR += data[idx + RED] * weight;
+                    sumG += data[idx + GREEN] * weight;
+                    sumB += data[idx + BLUE] * weight;
+                    if (filterAlpha) sumA += data[idx + 3] * weight;
+                }
+            }
+
+            int dstIdx = (y * width + x) * 4;
+            newData[dstIdx + RED] = (unsigned char)max(0.0f, min(255.0f, sumR));
+            newData[dstIdx + GREEN] = (unsigned char)max(0.0f, min(255.0f, sumG));
+            newData[dstIdx + BLUE] = (unsigned char)max(0.0f, min(255.0f, sumB));
+            newData[dstIdx + 3] = filterAlpha ? (unsigned char)max(0.0f, min(255.0f, sumA)) : data[dstIdx + 3];
+        }
+    }
+
+    delete[] data;
+    data = newData;
+    return true;
+}
