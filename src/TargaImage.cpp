@@ -24,10 +24,10 @@
 using namespace std;
 
 // constants
-const int           RED             = 0;                // red channel
-const int           GREEN           = 1;                // green channel
-const int           BLUE            = 2;                // blue channel
-const unsigned char BACKGROUND[3]   = { 0, 0, 0 };      // background color
+const int           RED = 0;                // red channel
+const int           GREEN = 1;                // green channel
+const int           BLUE = 2;                // blue channel
+const unsigned char BACKGROUND[3] = { 0, 0, 0 };      // background color
 
 // Clamp a value to a range
 template <typename T>
@@ -50,8 +50,8 @@ double Binomial(int n, int s)
     double        res;
 
     res = 1;
-    for (int i = 1 ; i <= s ; i++)
-        res = (n - i + 1) * res / i ;
+    for (int i = 1; i <= s; i++)
+        res = (n - i + 1) * res / i;
 
     return res;
 }// Binomial
@@ -63,7 +63,8 @@ double Binomial(int n, int s)
 //
 ///////////////////////////////////////////////////////////////////////////////
 TargaImage::TargaImage() : width(0), height(0), data(NULL)
-{}// TargaImage
+{
+}// TargaImage
 
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -72,8 +73,8 @@ TargaImage::TargaImage() : width(0), height(0), data(NULL)
 ///////////////////////////////////////////////////////////////////////////////
 TargaImage::TargaImage(int w, int h) : width(w), height(h)
 {
-   data = new unsigned char[width * height * 4];
-   ClearToBlack();
+    data = new unsigned char[width * height * 4];
+    ClearToBlack();
 }// TargaImage
 
 
@@ -83,7 +84,7 @@ TargaImage::TargaImage(int w, int h) : width(w), height(h)
 //      Constructor.  Initialize member variables to values given.
 //
 ///////////////////////////////////////////////////////////////////////////////
-TargaImage::TargaImage(int w, int h, unsigned char *d)
+TargaImage::TargaImage(int w, int h, unsigned char* d)
 {
     int i;
 
@@ -92,7 +93,7 @@ TargaImage::TargaImage(int w, int h, unsigned char *d)
     data = new unsigned char[width * height * 4];
 
     for (i = 0; i < width * height * 4; i++)
-	    data[i] = d[i];
+        data[i] = d[i];
 }// TargaImage
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -100,15 +101,15 @@ TargaImage::TargaImage(int w, int h, unsigned char *d)
 //      Copy Constructor.  Initialize member to that of input
 //
 ///////////////////////////////////////////////////////////////////////////////
-TargaImage::TargaImage(const TargaImage& image) 
+TargaImage::TargaImage(const TargaImage& image)
 {
-   width = image.width;
-   height = image.height;
-   data = NULL; 
-   if (image.data != NULL) {
-      data = new unsigned char[width * height * 4];
-      memcpy(data, image.data, sizeof(unsigned char) * width * height * 4);
-   }
+    width = image.width;
+    height = image.height;
+    data = NULL;
+    if (image.data != NULL) {
+        data = new unsigned char[width * height * 4];
+        memcpy(data, image.data, sizeof(unsigned char) * width * height * 4);
+    }
 }
 
 
@@ -133,22 +134,22 @@ TargaImage::~TargaImage()
 ///////////////////////////////////////////////////////////////////////////////
 unsigned char* TargaImage::To_RGB(void)
 {
-    unsigned char   *rgb = new unsigned char[width * height * 3];
+    unsigned char* rgb = new unsigned char[width * height * 3];
     int		    i, j;
 
-    if (! data)
-	    return NULL;
+    if (!data)
+        return NULL;
 
     // Divide out the alpha
-    for (i = 0 ; i < height ; i++)
+    for (i = 0; i < height; i++)
     {
-	    int in_offset = i * width * 4;
-	    int out_offset = i * width * 3;
+        int in_offset = i * width * 4;
+        int out_offset = i * width * 3;
 
-	    for (j = 0 ; j < width ; j++)
+        for (j = 0; j < width; j++)
         {
-	        RGBA_To_RGB(data + (in_offset + j*4), rgb + (out_offset + j*3));
-	    }
+            RGBA_To_RGB(data + (in_offset + j * 4), rgb + (out_offset + j * 3));
+        }
     }
 
     return rgb;
@@ -160,17 +161,17 @@ unsigned char* TargaImage::To_RGB(void)
 //      Save the image to a targa file. Returns 1 on success, 0 on failure.
 //
 ///////////////////////////////////////////////////////////////////////////////
-bool TargaImage::Save_Image(const char *filename)
+bool TargaImage::Save_Image(const char* filename)
 {
-    TargaImage	*out_image = Reverse_Rows();
+    TargaImage* out_image = Reverse_Rows();
 
-    if (! out_image)
-	    return false;
+    if (!out_image)
+        return false;
 
     if (!tga_write_raw(filename, width, height, out_image->data, TGA_TRUECOLOR_32))
     {
-	    cout << "TGA Save Error: %s\n", tga_error_string(tga_get_last_error());
-	    return false;
+        cout << "TGA Save Error: %s\n", tga_error_string(tga_get_last_error());
+        return false;
     }
 
     delete out_image;
@@ -185,11 +186,11 @@ bool TargaImage::Save_Image(const char *filename)
 //  must be deleted by caller.  Return NULL on failure.
 //
 ///////////////////////////////////////////////////////////////////////////////
-TargaImage* TargaImage::Load_Image(char *filename)
+TargaImage* TargaImage::Load_Image(char* filename)
 {
-    unsigned char   *temp_data;
-    TargaImage	    *temp_image;
-    TargaImage	    *result;
+    unsigned char* temp_data;
+    TargaImage* temp_image;
+    TargaImage* result;
     int		        width, height;
 
     if (!filename)
@@ -202,8 +203,8 @@ TargaImage* TargaImage::Load_Image(char *filename)
     if (!temp_data)
     {
         cout << "TGA Error: %s\n", tga_error_string(tga_get_last_error());
-	    width = height = 0;
-	    return NULL;
+        width = height = 0;
+        return NULL;
     }
     temp_image = new TargaImage(width, height, temp_data);
     free(temp_data);
@@ -225,27 +226,27 @@ TargaImage* TargaImage::Load_Image(char *filename)
 ///////////////////////////////////////////////////////////////////////////////
 bool TargaImage::To_Grayscale()
 {
-	if (!data)
-		return false;
+    if (!data)
+        return false;
 
-	for (int i = 0; i < width * height * 4; i += 4)
-	{
-		unsigned char r = data[i + RED];
-		unsigned char g = data[i + GREEN];
-		unsigned char b = data[i + BLUE];
+    for (int i = 0; i < width * height * 4; i += 4)
+    {
+        unsigned char r = data[i + RED];
+        unsigned char g = data[i + GREEN];
+        unsigned char b = data[i + BLUE];
 
-		float gray_f = 0.299f * r + 0.587f * g + 0.114f * b;
-		if (gray_f < 0.0f) gray_f = 0.0f;
-		if (gray_f > 255.0f) gray_f = 255.0f;
-		unsigned char gray = (unsigned char)gray_f;
+        float gray_f = 0.299f * r + 0.587f * g + 0.114f * b;
+        if (gray_f < 0.0f) gray_f = 0.0f;
+        if (gray_f > 255.0f) gray_f = 255.0f;
+        unsigned char gray = (unsigned char)gray_f;
 
-		data[i + RED] = gray;
-		data[i + GREEN] = gray;
-		data[i + BLUE] = gray;
-		// alpha (data[i + 3]) left unchanged
-	}
+        data[i + RED] = gray;
+        data[i + GREEN] = gray;
+        data[i + BLUE] = gray;
+        // alpha (data[i + 3]) left unchanged
+    }
 
-	return true;
+    return true;
 }// To_Grayscale
 
 
@@ -324,7 +325,7 @@ bool TargaImage::Quant_Populosity()
         if (hist[a] != hist[b])
             return hist[a] > hist[b];
         return a < b;
-    });
+        });
 
     // Palette entries use the bin center as representative: rep = bin * 8 + 4.
     struct RGB { unsigned char r, g, b; };
@@ -392,8 +393,8 @@ bool TargaImage::Dither_Threshold()
     {
         // Grayscale in range 0-255, then threshold at 0.5 (i.e. 127.5).
         float gray_f = 0.299f * data[i + RED]
-                     + 0.587f * data[i + GREEN]
-                     + 0.114f * data[i + BLUE];
+            + 0.587f * data[i + GREEN]
+            + 0.114f * data[i + BLUE];
         unsigned char v = (gray_f >= 127.5f) ? 255 : 0;
 
         data[i + RED] = v;
@@ -421,8 +422,8 @@ bool TargaImage::Dither_Random()
     for (int i = 0; i < width * height * 4; i += 4)
     {
         float g01 = (0.299f * data[i + RED]
-                   + 0.587f * data[i + GREEN]
-                   + 0.114f * data[i + BLUE]) / 255.0f;
+            + 0.587f * data[i + GREEN]
+            + 0.114f * data[i + BLUE]) / 255.0f;
         float noise = ((float)rand() / (float)RAND_MAX - 0.5f) * 0.4f;
         unsigned char v = (g01 + noise >= 0.5f) ? 255 : 0;
 
@@ -458,8 +459,8 @@ bool TargaImage::Dither_FS()
     for (int p = 0; p < npix; p++)
     {
         int gi = (int)(0.299 * data[p * 4 + RED]
-                     + 0.587 * data[p * 4 + GREEN]
-                     + 0.114 * data[p * 4 + BLUE]);
+            + 0.587 * data[p * 4 + GREEN]
+            + 0.114 * data[p * 4 + BLUE]);
         if (gi < 0) gi = 0;
         if (gi > 255) gi = 255;
         buf[p] = (float)gi;
@@ -477,8 +478,8 @@ bool TargaImage::Dither_FS()
             float oldv = buf[y * width + x];
             float newv = (oldv >= 127.5f) ? 255.0f : 0.0f;
             data[(y * width + x) * 4 + RED] =
-            data[(y * width + x) * 4 + GREEN] =
-            data[(y * width + x) * 4 + BLUE] =
+                data[(y * width + x) * 4 + GREEN] =
+                data[(y * width + x) * 4 + BLUE] =
                 (newv >= 127.5f) ? (unsigned char)255 : (unsigned char)0;
 
             float err = oldv - newv;
@@ -522,8 +523,8 @@ bool TargaImage::Dither_Bright()
     for (int p = 0; p < npix; p++)
     {
         float g = 0.299f * data[p * 4 + RED]
-                + 0.587f * data[p * 4 + GREEN]
-                + 0.114f * data[p * 4 + BLUE];
+            + 0.587f * data[p * 4 + GREEN]
+            + 0.114f * data[p * 4 + BLUE];
         int gi = (int)g;
         if (gi < 0) gi = 0;
         if (gi > 255) gi = 255;
@@ -600,8 +601,8 @@ bool TargaImage::Dither_Cluster()
         {
             int i = (y * width + x) * 4;
             int gi = (int)(0.299f * data[i + RED]
-                         + 0.587f * data[i + GREEN]
-                         + 0.114f * data[i + BLUE]);
+                + 0.587f * data[i + GREEN]
+                + 0.114f * data[i + BLUE]);
             if (gi < 0) gi = 0;
             if (gi > 255) gi = 255;
             // White if I > tile[y%4][x%4]; integer-exact form of
@@ -721,7 +722,7 @@ bool TargaImage::Comp_Over(TargaImage* pImage)
 {
     if (width != pImage->width || height != pImage->height)
     {
-        cout <<  "Comp_Over: Images not the same size\n";
+        cout << "Comp_Over: Images not the same size\n";
         return false;
     }
 
@@ -823,7 +824,7 @@ bool TargaImage::Difference(TargaImage* pImage)
         return false;
     }// if
 
-    for (int i = 0 ; i < width * height * 4 ; i += 4)
+    for (int i = 0; i < width * height * 4; i += 4)
     {
         unsigned char        rgb1[3];
         unsigned char        rgb2[3];
@@ -832,9 +833,9 @@ bool TargaImage::Difference(TargaImage* pImage)
         RGBA_To_RGB(pImage->data + i, rgb2);
 
         data[i] = abs(rgb1[0] - rgb2[0]);
-        data[i+1] = abs(rgb1[1] - rgb2[1]);
-        data[i+2] = abs(rgb1[2] - rgb2[2]);
-        data[i+3] = 255;
+        data[i + 1] = abs(rgb1[1] - rgb2[1]);
+        data[i + 2] = abs(rgb1[2] - rgb2[2]);
+        data[i + 3] = 255;
     }
 
     return true;
@@ -896,7 +897,7 @@ bool TargaImage::Filter_Gaussian() {
 ///////////////////////////////////////////////////////////////////////////////
 
 bool TargaImage::Filter_Gaussian_N(unsigned int N) {
-	if (N <= 0 || N % 2 == 0) return false; // N needs to be odd and positive
+    if (N <= 0 || N % 2 == 0) return false; // N needs to be odd and positive
 
     vector<double> b1d(N);
     double sum1D = 0.0;
@@ -923,15 +924,53 @@ bool TargaImage::Filter_Gaussian_N(unsigned int N) {
 //
 ///////////////////////////////////////////////////////////////////////////////
 bool TargaImage::Filter_Edge() {
-    // 5x5 Laplacian / Edge Detection Kernel
-    float kernel[25] = {
-        -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f, 24.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,
-        -1.0f, -1.0f, -1.0f, -1.0f, -1.0f
+    // 3x3 Standard High-Pass Edge Matrix
+    float kernel[3][3] = {
+        { -1.0f, -1.0f, -1.0f },
+        { -1.0f,  8.0f, -1.0f },
+        { -1.0f, -1.0f, -1.0f }
     };
-    return Apply_Filter(kernel, 5, false);
+
+    unsigned char* newData = new unsigned char[width * height * 4];
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            float edgeSum = 0.0f;
+
+            for (int ky = -1; ky <= 1; ++ky) {
+                for (int kx = -1; kx <= 1; ++kx) {
+                    int sampleX = Clamp_Reflect(x + kx, width);
+                    int sampleY = Clamp_Reflect(y + ky, height);
+
+                    int sampleIdx = (sampleY * width + sampleX) * 4;
+
+                    // 1. Convert sampled pixel to luminance to avoid color noise
+                    float r = (float)data[sampleIdx];
+                    float g = (float)data[sampleIdx + 1];
+                    float b = (float)data[sampleIdx + 2];
+                    float gray = 0.299f * r + 0.587f * g + 0.114f * b;
+
+                    // 2. Perform convolution on grayscale value
+                    edgeSum += gray * kernel[ky + 1][kx + 1];
+                }
+            }
+
+            // 3. Truncate negative values (do not take absolute value)
+            float val = max(0.0f, min(255.0f, edgeSum));
+
+            int targetIdx = (y * width + x) * 4;
+
+            // 4. Fill grayscale edge intensity synchronously into RGB to produce clean, noise-free fine outlines
+            newData[targetIdx] = (unsigned char)val;
+            newData[targetIdx + 1] = (unsigned char)val;
+            newData[targetIdx + 2] = (unsigned char)val;
+            newData[targetIdx + 3] = data[targetIdx + 3]; // Alpha Channel
+        }
+    }
+
+    memcpy(data, newData, width * height * 4);
+    delete[] newData;
+    return true;
 }// Filter_Edge
 
 
@@ -942,15 +981,34 @@ bool TargaImage::Filter_Edge() {
 //
 ///////////////////////////////////////////////////////////////////////////////
 bool TargaImage::Filter_Enhance() {
-    // 5x5 Sharpness/Enhancement Kernel
-    float kernel[25] = {
-        -1.0f, -1.0f, -1.0f, -1.0f, -1.0f,
-        -1.0f, -2.0f, -2.0f, -2.0f, -1.0f,
-        -1.0f, -2.0f, 41.0f, -2.0f, -1.0f,
-        -1.0f, -2.0f, -2.0f, -2.0f, -1.0f,
-        -1.0f, -1.0f, -1.0f, -1.0f, -1.0f
-    };
-    return Apply_Filter(kernel, 5, false);
+    // 1. Create a backup copy of the original image data
+    unsigned char* originalData = new unsigned char[width * height * 4];
+    memcpy(originalData, data, width * height * 4);
+
+    // 2. Call Filter_Edge() to calculate edges
+    // (After execution, the data array will store the black-background Edge image)
+    if (!Filter_Edge()) {
+        delete[] originalData;
+        return false;
+    }
+
+    // 3. Add original image and edge image together
+    for (int i = 0; i < width * height * 4; i += 4) {
+        // Add original pixel and edge pixel directly
+        float r = (float)originalData[i] + (float)data[i];
+        float g = (float)originalData[i + 1] + (float)data[i + 1];
+        float b = (float)originalData[i + 2] + (float)data[i + 2];
+
+        // Apply strict clamping to prevent image corruption from overflow
+        data[i] = (unsigned char)max(0.0f, min(255.0f, r));
+        data[i + 1] = (unsigned char)max(0.0f, min(255.0f, g));
+        data[i + 2] = (unsigned char)max(0.0f, min(255.0f, b));
+        // Keep original Alpha channel value
+        data[i + 3] = originalData[i + 3];
+    }
+
+    delete[] originalData;
+    return true;
 }// Filter_Enhance
 
 
@@ -965,28 +1023,28 @@ bool TargaImage::Filter_Enhance() {
 bool TargaImage::NPR_Paint() {
     if (!data) return false;
 
-    // 備份原始圖作為最精準的參考原圖
+    // Backup original image as precise reference for all layers
     TargaImage originalImage(*this);
 
-    // 從黑色畫布開始繪製
+    // Start painting from black canvas
     ClearToBlack();
 
-    // 3 層筆刷半徑 (7 -> 3 -> 1)
+    // Three brush layers (7 -> 3 -> 1, coarse to fine)
     const int radii[3] = { 7, 3, 1 };
 
-    // Hertzmann 演算法標準門檻 (T=25)
-    // R=7 打底大色塊，R=3 填補輪廓，R=1 精細刻畫邊緣與細節
+    // Standard Hertzmann algorithm thresholds
+    // R=7 for base color blocks, R=3 for fill outlines, R=1 for fine edges and details
     const float thresholds[3] = { 10.0f, 25.0f, 25.0f };
 
-    // 固定隨機種子，確保每次繪製結果穩定
+    // Fixed random seed for reproducible painting results
     srand(42);
 
     for (int layer = 0; layer < 3; layer++) {
         int R = radii[layer];
         float threshold = thresholds[layer];
-        int step = max(1, R); // 網格步長
+        int step = max(1, R); // Grid step
 
-        // 產生該層的高斯模糊參考圖 (2R + 1)
+        // Generate Gaussian-blurred reference image for this layer (size = 2R + 1)
         TargaImage referenceImage(originalImage);
         referenceImage.Filter_Gaussian_N(2 * R + 1);
 
@@ -1007,8 +1065,8 @@ bool TargaImage::NPR_Paint() {
 
                         int idx = (py * width + px) * 4;
 
-                        // 💡【關鍵修正】：計算「當前畫布 data」與「該層模糊參考圖 referenceImage」的誤差
-                        // 確保上一層留下的模糊處能正確觸發下一層細節筆刷
+                        // KEY FIX: Compute error between current canvas and layer-specific blurred reference
+                        // Ensures blurred regions from previous layer correctly trigger fine-detail strokes
                         float diffR = (float)data[idx + RED] - (float)referenceImage.data[idx + RED];
                         float diffG = (float)data[idx + GREEN] - (float)referenceImage.data[idx + GREEN];
                         float diffB = (float)data[idx + BLUE] - (float)referenceImage.data[idx + BLUE];
@@ -1023,17 +1081,17 @@ bool TargaImage::NPR_Paint() {
                     }
                 }
 
-                // 當誤差超過門檻時建立筆劃
+                // Create stroke when error exceeds threshold
                 if (maxError > threshold) {
                     int strokeIdx = (maxErrorY * width + maxErrorX) * 4;
 
-                    // ✨【關鍵特效 1】：大筆刷增加位置抖動 (Jitter)，打破死板網格感
+                    // Effect 1: Add positional jitter to larger brushes to break rigid grid feel
                     int jitterX = (R > 1) ? (rand() % (R + 1) - R / 2) : 0;
                     int jitterY = (R > 1) ? (rand() % (R + 1) - R / 2) : 0;
                     int finalX = Clamp_Reflect(maxErrorX + jitterX, width);
                     int finalY = Clamp_Reflect(maxErrorY + jitterY, height);
 
-                    // ✨【關鍵特效 2】：適度放大色彩抖動 (Color Jitter, -10~+10) 強化印象派手繪感
+                    // Effect 2: Apply color jitter (-10~+10) to enhance Impressionist hand-painted feel
                     int jitterR = (rand() % 21) - 10;
                     int jitterG = (rand() % 21) - 10;
                     int jitterB = (rand() % 21) - 10;
@@ -1048,10 +1106,10 @@ bool TargaImage::NPR_Paint() {
             }
         }
 
-        // 打亂筆劃順序，消除掃描線條紋
+        // Shuffle stroke order to eliminate scan-line artifacts
         std::random_shuffle(strokeList.begin(), strokeList.end());
 
-        // 繪製該層的所有筆劃
+        // Paint all strokes for this layer
         for (size_t i = 0; i < strokeList.size(); i++) {
             Paint_Stroke(strokeList[i]);
         }
@@ -1067,7 +1125,7 @@ inline float Bartlett_Weight1D(float d) {
     return 1.0f - absD * 0.5f;
 }
 
-// 使用 4x4 Bartlett 濾鏡採樣原圖點 (srcX, srcY)
+// Sample original image point (srcX, srcY) using 4x4 Bartlett filter
 void Sample_Bartlett_4x4(const unsigned char* srcData, int srcW, int srcH, float srcX, float srcY, float outColor[4]) {
     outColor[0] = outColor[1] = outColor[2] = outColor[3] = 0.0f;
     float totalWeight = 0.0f;
@@ -1076,7 +1134,7 @@ void Sample_Bartlett_4x4(const unsigned char* srcData, int srcW, int srcH, float
     int minY = (int)floorf(srcY) - 1;
 
     for (int y = minY; y <= minY + 3; y++) {
-        if (y < 0 || y >= srcH) continue; // 超出邊界視為透明/黑色
+        if (y < 0 || y >= srcH) continue; // Out of bounds treated as transparent/black
         float wy = Bartlett_Weight1D(srcY - (y + 0.5f));
         if (wy <= 0.0f) continue;
 
@@ -1122,10 +1180,10 @@ bool TargaImage::Scale(float scaleFactor) {
             Sample_Bartlett_4x4(data, width, height, srcX, srcY, color);
 
             int idx = (y * newW + x) * 4;
-            newData[idx + RED]   = (unsigned char)max(0.0f, min(255.0f, color[0]));
+            newData[idx + RED] = (unsigned char)max(0.0f, min(255.0f, color[0]));
             newData[idx + GREEN] = (unsigned char)max(0.0f, min(255.0f, color[1]));
-            newData[idx + BLUE]  = (unsigned char)max(0.0f, min(255.0f, color[2]));
-            newData[idx + 3]     = (unsigned char)max(0.0f, min(255.0f, color[3]));
+            newData[idx + BLUE] = (unsigned char)max(0.0f, min(255.0f, color[2]));
+            newData[idx + 3] = (unsigned char)max(0.0f, min(255.0f, color[3]));
         }
     }
 
@@ -1207,7 +1265,7 @@ bool TargaImage::Resize(float scale) {
 bool TargaImage::Rotate(float angleDegrees) {
     if (!data) return false;
 
-    float rad = -angleDegrees * (3.14159265358979323846f / 180.0f); // 順時針轉置方向
+    float rad = -angleDegrees * (3.14159265358979323846f / 180.0f); // Clockwise rotation direction
     float cosA = cosf(rad);
     float sinA = sinf(rad);
 
@@ -1215,14 +1273,14 @@ bool TargaImage::Rotate(float angleDegrees) {
     float cy = height / 2.0f;
 
     unsigned char* newData = new unsigned char[width * height * 4];
-    memset(newData, 0, width * height * 4); // 預設黑色與透明
+    memset(newData, 0, width * height * 4); // Default to black and transparent
 
     for (int y = 0; y < height; y++) {
         float dy = (y + 0.5f) - cy;
         for (int x = 0; x < width; x++) {
             float dx = (x + 0.5f) - cx;
 
-            // 逆向計算原圖座標
+            // Reverse calculation for original image coordinates
             float srcX = cosA * dx - sinA * dy + cx;
             float srcY = sinA * dx + cosA * dy + cy;
 
@@ -1251,7 +1309,7 @@ bool TargaImage::Rotate(float angleDegrees) {
 //      equivalent composited with a black background.
 //
 ///////////////////////////////////////////////////////////////////////////////
-void TargaImage::RGBA_To_RGB(unsigned char *rgba, unsigned char *rgb)
+void TargaImage::RGBA_To_RGB(unsigned char* rgba, unsigned char* rgb)
 {
     const unsigned char	BACKGROUND[3] = { 0, 0, 0 };
 
@@ -1265,20 +1323,20 @@ void TargaImage::RGBA_To_RGB(unsigned char *rgba, unsigned char *rgb)
     }
     else
     {
-	    float	alpha_scale = (float)255 / (float)alpha;
-	    int	val;
-	    int	i;
+        float	alpha_scale = (float)255 / (float)alpha;
+        int	val;
+        int	i;
 
-	    for (i = 0 ; i < 3 ; i++)
-	    {
-	        val = (int)floor(rgba[i] * alpha_scale);
-	        if (val < 0)
-		    rgb[i] = 0;
-	        else if (val > 255)
-		    rgb[i] = 255;
-	        else
-		    rgb[i] = val;
-	    }
+        for (i = 0; i < 3; i++)
+        {
+            val = (int)floor(rgba[i] * alpha_scale);
+            if (val < 0)
+                rgb[i] = 0;
+            else if (val > 255)
+                rgb[i] = 255;
+            else
+                rgb[i] = val;
+        }
     }
 }// RGA_To_RGB
 
@@ -1291,24 +1349,23 @@ void TargaImage::RGBA_To_RGB(unsigned char *rgba, unsigned char *rgb)
 ///////////////////////////////////////////////////////////////////////////////
 TargaImage* TargaImage::Reverse_Rows(void)
 {
-    unsigned char   *dest = new unsigned char[width * height * 4];
-    TargaImage	    *result;
-    int 	        i, j;
+    unsigned char* dest = new unsigned char[width * height * 4];
+    TargaImage* result;
+    int i, j;
 
-    if (! data)
-    	return NULL;
+    if (!data) return NULL;
 
-    for (i = 0 ; i < height ; i++)
+    for (i = 0; i < height; i++)
     {
-	    int in_offset = (height - i - 1) * width * 4;
-	    int out_offset = i * width * 4;
+        int in_offset = (height - i - 1) * width * 4;
+        int out_offset = i * width * 4;
 
-	    for (j = 0 ; j < width ; j++)
+        for (j = 0; j < width; j++)
         {
-	        dest[out_offset + j * 4] = data[in_offset + j * 4];
-	        dest[out_offset + j * 4 + 1] = data[in_offset + j * 4 + 1];
-	        dest[out_offset + j * 4 + 2] = data[in_offset + j * 4 + 2];
-	        dest[out_offset + j * 4 + 3] = data[in_offset + j * 4 + 3];
+            dest[out_offset + j * 4] = data[in_offset + j * 4];
+            dest[out_offset + j * 4 + 1] = data[in_offset + j * 4 + 1];
+            dest[out_offset + j * 4 + 2] = data[in_offset + j * 4 + 2];
+            dest[out_offset + j * 4 + 3] = data[in_offset + j * 4 + 3];
         }
     }
 
@@ -1336,33 +1393,34 @@ void TargaImage::ClearToBlack()
 //
 ///////////////////////////////////////////////////////////////////////////////
 void TargaImage::Paint_Stroke(const Stroke& s) {
-   int radius_squared = (int)s.radius * (int)s.radius;
+    int radius_squared = (int)s.radius * (int)s.radius;
 
-   for (int x_off = -((int)s.radius); x_off <= (int)s.radius; x_off++) {
-      for (int y_off = -((int)s.radius); y_off <= (int)s.radius; y_off++) {
-         int x_loc = (int)s.x + x_off;
-         int y_loc = (int)s.y + y_off;
-         // are we inside the circle, and inside the image?
-         if ((x_loc >= 0 && x_loc < width && y_loc >= 0 && y_loc < height)) {
-            int dist_squared = x_off * x_off + y_off * y_off;
-            if (dist_squared <= radius_squared) {
-               data[(y_loc * width + x_loc) * 4 + 0] = s.r;
-               data[(y_loc * width + x_loc) * 4 + 1] = s.g;
-               data[(y_loc * width + x_loc) * 4 + 2] = s.b;
-               data[(y_loc * width + x_loc) * 4 + 3] = s.a;
-            } else if (dist_squared == radius_squared + 1) {
-               data[(y_loc * width + x_loc) * 4 + 0] = 
-                  (data[(y_loc * width + x_loc) * 4 + 0] + s.r) / 2;
-               data[(y_loc * width + x_loc) * 4 + 1] = 
-                  (data[(y_loc * width + x_loc) * 4 + 1] + s.g) / 2;
-               data[(y_loc * width + x_loc) * 4 + 2] = 
-                  (data[(y_loc * width + x_loc) * 4 + 2] + s.b) / 2;
-               data[(y_loc * width + x_loc) * 4 + 3] = 
-                  (data[(y_loc * width + x_loc) * 4 + 3] + s.a) / 2;
+    for (int x_off = -((int)s.radius); x_off <= (int)s.radius; x_off++) {
+        for (int y_off = -((int)s.radius); y_off <= (int)s.radius; y_off++) {
+            int x_loc = (int)s.x + x_off;
+            int y_loc = (int)s.y + y_off;
+            // are we inside the circle, and inside the image?
+            if ((x_loc >= 0 && x_loc < width && y_loc >= 0 && y_loc < height)) {
+                int dist_squared = x_off * x_off + y_off * y_off;
+                if (dist_squared <= radius_squared) {
+                    data[(y_loc * width + x_loc) * 4 + 0] = s.r;
+                    data[(y_loc * width + x_loc) * 4 + 1] = s.g;
+                    data[(y_loc * width + x_loc) * 4 + 2] = s.b;
+                    data[(y_loc * width + x_loc) * 4 + 3] = s.a;
+                }
+                else if (dist_squared == radius_squared + 1) {
+                    data[(y_loc * width + x_loc) * 4 + 0] =
+                        (data[(y_loc * width + x_loc) * 4 + 0] + s.r) / 2;
+                    data[(y_loc * width + x_loc) * 4 + 1] =
+                        (data[(y_loc * width + x_loc) * 4 + 1] + s.g) / 2;
+                    data[(y_loc * width + x_loc) * 4 + 2] =
+                        (data[(y_loc * width + x_loc) * 4 + 2] + s.b) / 2;
+                    data[(y_loc * width + x_loc) * 4 + 3] =
+                        (data[(y_loc * width + x_loc) * 4 + 3] + s.a) / 2;
+                }
             }
-         }
-      }
-   }
+        }
+    }
 }
 
 
@@ -1382,8 +1440,8 @@ Stroke::Stroke()
 //
 ///////////////////////////////////////////////////////////////////////////////
 Stroke::Stroke(unsigned int iradius, unsigned int ix, unsigned int iy,
-               unsigned char ir, unsigned char ig, unsigned char ib, unsigned char ia) :
-   radius(iradius),x(ix),y(iy),r(ir),g(ig),b(ib),a(ia)
+    unsigned char ir, unsigned char ig, unsigned char ib, unsigned char ia) :
+    radius(iradius), x(ix), y(iy), r(ir), g(ig), b(ib), a(ia)
 {
 }
 
