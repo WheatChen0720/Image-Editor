@@ -1020,98 +1020,200 @@ bool TargaImage::Filter_Enhance() {
 // Return success of operation.
 //
 ///////////////////////////////////////////////////////////////////////////////
-bool TargaImage::NPR_Paint() {
-    if (!data) return false;
+bool TargaImage::NPR_Paint()
+{
+    // ==========================================
+    // 1. Basic Hertzmann Algorithm (15 pts)
+    // ==========================================
+    // Parameters specified by the requirement:
+    // Brush radii: 7, 3, 1
+    // fg (grid size): 1
+    // Threshold T: 25
+    int radii[3] = { 7, 3, 1 };
+    int fg = 1;
+    int T = 25;
 
-    // Backup original image as precise reference for all layers
-    TargaImage originalImage(*this);
+    // Initialize canvas (fill with pure black initially)
+    TargaImage* canvas = new TargaImage(width, height);
+    for (int i = 0; i < width * height * 4; i += 4) {
+        canvas->data[i] = 0;   // R
+        canvas->data[i + 1] = 0;   // G
+        canvas->data[i + 2] = 0;   // B
+        canvas->data[i + 3] = 255; // A
+    }
 
-    // Start painting from black canvas
-    ClearToBlack();
+    // Multi-pass rendering: from largest to smallest brush size (7 -> 3 -> 1)
+    for (int step = 0; step < 3; ++step) {
+        int R = radii[step];
+        int kernelSize = 2 * R + 1; // Required filter size: 2*R + 1
 
-    // Three brush layers (7 -> 3 -> 1, coarse to fine)
-    const int radii[3] = { 7, 3, 1 };
+        // Generate Gaussian blurred reference image for the current layer
+        TargaImage* refImage = new TargaImage(*this);
+        if (!refImage->Filter_Gaussian_N(kernelSize)) {
+            delete refImage;
+            refImage = this;
+        } // Fallback safety check
 
-    // Standard Hertzmann algorithm thresholds
-    // R=7 for base color blocks, R=3 for fill outlines, R=1 for fine edges and details
-    const float thresholds[3] = { 10.0f, 25.0f, 25.0f };
+        // Compute pixel-wise Euclidean distance error map between canvas and reference image
+        vector<float> errorMap(width * height, 0.0f);
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                int idx = (y * width + x) * 4;
+                float dr = (float)canvas->data[idx] - (float)refImage->data[idx];
+                float dg = (float)canvas->data[idx + 1] - (float)refImage->data[idx + 1];
+                float db = (float)canvas->data[idx + 2] - (float)refImage->data[idx + 2];
+                errorMap[y * width + x] = sqrtf(dr * dr + dg * dg + db * db);
+            }
+        }
 
-    // Fixed random seed for reproducible painting results
-    srand(42);
-
-    for (int layer = 0; layer < 3; layer++) {
-        int R = radii[layer];
-        float threshold = thresholds[layer];
-        int step = max(1, R); // Grid step
-
-        // Generate Gaussian-blurred reference image for this layer (size = 2R + 1)
-        TargaImage referenceImage(originalImage);
-        referenceImage.Filter_Gaussian_N(2 * R + 1);
-
+        // Search for grid locations that require brush strokes
         vector<Stroke> strokeList;
+        int halfR = R / 2;
 
-        for (int y = 0; y < height; y += step) {
-            for (int x = 0; x < width; x += step) {
-
+        for (int y = 0; y < height; y += fg) {
+            for (int x = 0; x < width; x += fg) {
+                float areaErrorSum = 0.0f;
                 float maxError = -1.0f;
-                int maxErrorX = x;
-                int maxErrorY = y;
+                int max_x = x, max_y = y;
+                int count = 0;
 
-                int halfStep = step / 2;
-                for (int dy = -halfStep; dy <= halfStep; dy++) {
-                    int py = Clamp_Reflect(y + dy, height);
-                    for (int dx = -halfStep; dx <= halfStep; dx++) {
-                        int px = Clamp_Reflect(x + dx, width);
-
-                        int idx = (py * width + px) * 4;
-
-                        // KEY FIX: Compute error between current canvas and layer-specific blurred reference
-                        // Ensures blurred regions from previous layer correctly trigger fine-detail strokes
-                        float diffR = (float)data[idx + RED] - (float)referenceImage.data[idx + RED];
-                        float diffG = (float)data[idx + GREEN] - (float)referenceImage.data[idx + GREEN];
-                        float diffB = (float)data[idx + BLUE] - (float)referenceImage.data[idx + BLUE];
-
-                        float error = sqrtf(diffR * diffR + diffG * diffG + diffB * diffB);
-
-                        if (error > maxError) {
-                            maxError = error;
-                            maxErrorX = px;
-                            maxErrorY = py;
+                // Calculate average error and locate maximum error point in the neighborhood
+                for (int dy = -halfR; dy <= halfR; ++dy) {
+                    for (int dx = -halfR; dx <= halfR; ++dx) {
+                        int nx = x + dx;
+                        int ny = y + dy;
+                        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                            float err = errorMap[ny * width + nx];
+                            areaErrorSum += err;
+                            count++;
+                            if (err > maxError) {
+                                maxError = err;
+                                max_x = nx;
+                                max_y = ny;
+                            }
                         }
                     }
                 }
 
-                // Create stroke when error exceeds threshold
-                if (maxError > threshold) {
-                    int strokeIdx = (maxErrorY * width + maxErrorX) * 4;
+                float areaError = (count > 0) ? (areaErrorSum / count) : 0.0f;
 
-                    // Effect 1: Add positional jitter to larger brushes to break rigid grid feel
-                    int jitterX = (R > 1) ? (rand() % (R + 1) - R / 2) : 0;
-                    int jitterY = (R > 1) ? (rand() % (R + 1) - R / 2) : 0;
-                    int finalX = Clamp_Reflect(maxErrorX + jitterX, width);
-                    int finalY = Clamp_Reflect(maxErrorY + jitterY, height);
+                // Add stroke if the average region error exceeds threshold T
+                if (areaError > T) {
+                    Stroke s;
+                    s.x = max_x;
+                    s.y = max_y;
+                    s.radius = R;
 
-                    // Effect 2: Apply color jitter (-10~+10) to enhance Impressionist hand-painted feel
-                    int jitterR = (rand() % 21) - 10;
-                    int jitterG = (rand() % 21) - 10;
-                    int jitterB = (rand() % 21) - 10;
+                    int refIdx = (max_y * width + max_x) * 4;
 
-                    unsigned char strokeR = (unsigned char)max(0, min(255, (int)referenceImage.data[strokeIdx + RED] + jitterR));
-                    unsigned char strokeG = (unsigned char)max(0, min(255, (int)referenceImage.data[strokeIdx + GREEN] + jitterG));
-                    unsigned char strokeB = (unsigned char)max(0, min(255, (int)referenceImage.data[strokeIdx + BLUE] + jitterB));
-                    unsigned char strokeA = 255;
+                    // [Advance Feature 1: Impressionist Color Jitter]
+                    // Add subtle random offsets to RGB channels to simulate oil paint texture
+                    int jitterR = (rand() % 11) - 5;
+                    int jitterG = (rand() % 11) - 5;
+                    int jitterB = (rand() % 11) - 5;
 
-                    strokeList.push_back(Stroke(R, finalX, finalY, strokeR, strokeG, strokeB, strokeA));
+                    s.r = min(255, max(0, refImage->data[refIdx] + jitterR));
+                    s.g = min(255, max(0, refImage->data[refIdx + 1] + jitterG));
+                    s.b = min(255, max(0, refImage->data[refIdx + 2] + jitterB));
+                    s.a = 255;
+
+                    strokeList.push_back(s);
                 }
             }
         }
 
-        // Shuffle stroke order to eliminate scan-line artifacts
+        // Randomly shuffle strokes to simulate natural hand painting order
         std::random_shuffle(strokeList.begin(), strokeList.end());
 
-        // Paint all strokes for this layer
-        for (size_t i = 0; i < strokeList.size(); i++) {
-            Paint_Stroke(strokeList[i]);
+        // Draw strokes onto the canvas
+        for (size_t i = 0; i < strokeList.size(); ++i) {
+            canvas->Paint_Stroke(strokeList[i]);
+        }
+
+        if (refImage != this) delete refImage;
+    }
+
+    // Copy rendered painterly canvas data back to current image buffer
+    memcpy(data, canvas->data, width * height * 4);
+    delete canvas;
+
+    // ==========================================
+    // 2. [Advance Feature 2: Cel-Shading Outlines (15~50 pts)]
+    // ==========================================
+    // Apply Gaussian blur on original image to reduce noise before edge detection
+    TargaImage* blurredImage = new TargaImage(*this);
+    if (!blurredImage->Filter_Gaussian_N(5)) {
+        delete blurredImage;
+        blurredImage = nullptr;
+    }
+
+    // Compute Sobel gradient magnitude to extract edge features
+    vector<float> edgeMap(width * height, 0.0f);
+    int sobelX[3][3] = { {-1, 0, 1}, {-2, 0, 2}, {-1, 0, 1} };
+    int sobelY[3][3] = { {-1, -2, -1}, {0, 0, 0}, {1, 2, 1} };
+
+    for (int y = 1; y < height - 1; ++y) {
+        for (int x = 1; x < width - 1; ++x) {
+            float gxR = 0, gyR = 0;
+            float gxG = 0, gyG = 0;
+            float gxB = 0, gyB = 0;
+
+            for (int dy = -1; dy <= 1; ++dy) {
+                for (int dx = -1; dx <= 1; ++dx) {
+                    int idx = ((y + dy) * width + (x + dx)) * 4;
+                    int wx = sobelX[dy + 1][dx + 1];
+                    int wy = sobelY[dy + 1][dx + 1];
+
+                    gxR += blurredImage->data[idx] * wx;
+                    gyR += blurredImage->data[idx] * wy;
+                    gxG += blurredImage->data[idx + 1] * wx;
+                    gyG += blurredImage->data[idx + 1] * wy;
+                    gxB += blurredImage->data[idx + 2] * wx;
+                    gyB += blurredImage->data[idx + 2] * wy;
+                }
+            }
+
+            float magR = sqrtf(gxR * gxR + gyR * gyR);
+            float magG = sqrtf(gxG * gxG + gyG * gyG);
+            float magB = sqrtf(gxB * gxB + gyB * gyB);
+
+            // Average magnitude across RGB channels
+            edgeMap[y * width + x] = (magR + magG + magB) / 3.0f;
+        }
+    }
+
+    if (blurredImage != this) delete blurredImage;
+
+    // Binary thresholding and dilation to thicken edge outlines
+    vector<bool> dilatedEdges(width * height, false);
+    float edgeThreshold = 100.0f; // Threshold for edge detection
+
+    for (int y = 1; y < height - 1; ++y) {
+        for (int x = 1; x < width - 1; ++x) {
+            if (edgeMap[y * width + x] > edgeThreshold) {
+                // Perform 3x3 dilation
+                for (int dy = -1; dy <= 1; ++dy) {
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        int nx = x + dx;
+                        int ny = y + dy;
+                        if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                            dilatedEdges[ny * width + nx] = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Overlay dark cartoon outlines onto the painterly rendering canvas
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            if (dilatedEdges[y * width + x]) {
+                int idx = (y * width + x) * 4;
+                data[idx] = 0; // Black outline R
+                data[idx + 1] = 0; // Black outline G
+                data[idx + 2] = 0; // Black outline B
+            }
         }
     }
 
