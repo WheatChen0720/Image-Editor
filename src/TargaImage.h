@@ -85,6 +85,9 @@ class TargaImage
 
 	// Draws a filled circle according to the stroke data
         void Paint_Stroke(const Stroke& s);
+    
+	// Draws an impressionist stroke according to the stroke data
+        void Paint_Impressionist_Stroke(const Stroke& s);
 
     // members
     public:

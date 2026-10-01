@@ -1127,7 +1127,7 @@ bool TargaImage::NPR_Paint()
 
         // Draw strokes onto the canvas
         for (size_t i = 0; i < strokeList.size(); ++i) {
-            canvas->Paint_Stroke(strokeList[i]);
+            canvas->Paint_Impressionist_Stroke(strokeList[i]);
         }
 
         if (refImage != this) delete refImage;
@@ -1520,6 +1520,50 @@ void TargaImage::Paint_Stroke(const Stroke& s) {
                     data[(y_loc * width + x_loc) * 4 + 3] =
                         (data[(y_loc * width + x_loc) * 4 + 3] + s.a) / 2;
                 }
+            }
+        }
+    }
+}
+
+
+void TargaImage::Paint_Impressionist_Stroke(const Stroke& s)
+{
+    int cx = s.x;
+    int cy = s.y;
+    int r = s.radius;
+
+    // If the brush radius is too small, draw a single pixel fallback stroke
+    if (r <= 1) {
+        Paint_Stroke(s);
+        return;
+    }
+
+    // Set stroke length and half-width to form an elongated rectangular brush
+    int length = r * 3;
+    int width_half = max(1, r / 2);
+
+    // Set brush rotation angle (demonstrating a fixed 45-degree slant brush)
+    float angle = 45.0f * 3.14159f / 180.0f;
+    float cosA = cos(angle);
+    float sinA = sin(angle);
+
+    // Iterate through the local rotated rectangle grid
+    for (int l = -length / 2; l <= length / 2; ++l) {
+        for (int w = -width_half; w <= width_half; ++w) {
+            // Apply 2D rotation transformation matrix
+            int dx = (int)(l * cosA - w * sinA);
+            int dy = (int)(l * sinA + w * cosA);
+
+            int px = cx + dx;
+            int px_y = cy + dy;
+
+            // Bounds check to ensure pixels stay inside image canvas
+            if (px >= 0 && px < width && px_y >= 0 && px_y < height) {
+                int idx = (px_y * width + px) * 4;
+                data[idx] = s.r; // Red channel
+                data[idx + 1] = s.g; // Green channel
+                data[idx + 2] = s.b; // Blue channel
+                data[idx + 3] = 255; // Alpha channel
             }
         }
     }
